@@ -128,7 +128,7 @@ class BaseDecoder(object):
     pass
 
 
-class MusicVAE(object):
+class MusicVAE(object): ##目标类
   """Music Variational Autoencoder."""
 
   def __init__(self, encoder, decoder):
@@ -141,7 +141,7 @@ class MusicVAE(object):
     self._encoder = encoder
     self._decoder = decoder
 
-  def build(self, hparams, output_depth, is_training):
+  def build(self, hparams, output_depth, is_training): ##建图
     """Builds encoder and decoder.
 
     Must be called within a graph.
@@ -156,10 +156,10 @@ class MusicVAE(object):
                     self.encoder.__class__.__name__,
                     self.decoder.__class__.__name__,
                     hparams.values())
-    self.global_step = tf.train.get_or_create_global_step()
+    self.global_step = tf.train.get_or_create_global_step() ##一个全局的计数器
     self._hparams = hparams
-    self._encoder.build(hparams, is_training)
-    self._decoder.build(hparams, output_depth, is_training)
+    self._encoder.build(hparams, is_training) ##编码器建立
+    self._decoder.build(hparams, output_depth, is_training) ##译码器的建立
 
   @property
   def encoder(self):
@@ -170,12 +170,12 @@ class MusicVAE(object):
     return self._decoder
 
   @property
-  def hparams(self):
+  def hparams(self): ##超参数
     return self._hparams
 
   def encode(self, sequence, sequence_length, control_sequence=None):
     """Encodes input sequences into a MultivariateNormalDiag distribution.
-
+      将输入序列编码为多变量正态分布
     Args:
       sequence: A Tensor with shape `[num_sequences, max_length, input_depth]`
           containing the sequences to encode.
@@ -187,46 +187,46 @@ class MusicVAE(object):
 
     Returns:
       A tfp.distributions.MultivariateNormalDiag representing the posterior
-      distribution for each sequence.
+      distribution for each sequence. ##返回的是每一个序列的分布吧
     """
     hparams = self.hparams
-    z_size = hparams.z_size
+    z_size = hparams.z_size ##中间Z的大小
 
-    sequence = tf.to_float(sequence)
-    if control_sequence is not None:
+    sequence = tf.to_float(sequence) ##将sequence转变为浮点形
+    if control_sequence is not None: ##如果control sequence不为空，则也转变为浮点
       control_sequence = tf.to_float(control_sequence)
-      sequence = tf.concat([sequence, control_sequence], axis=-1)
-    encoder_output = self.encoder.encode(sequence, sequence_length)
+      sequence = tf.concat([sequence, control_sequence], axis=-1) ##并且把control sequence和sequence合并在一起 
+    encoder_output = self.encoder.encode(sequence, sequence_length) ##output是经过一个encode出来之后的东西。
 
-    mu = tf.layers.dense(
+    mu = tf.layers.dense( ##计算mu 
         encoder_output,
         z_size,
         name='encoder/mu',
-        kernel_initializer=tf.random_normal_initializer(stddev=0.001))
-    sigma = tf.layers.dense(
+        kernel_initializer=tf.random_normal_initializer(stddev=0.001)) ##
+    sigma = tf.layers.dense( ##计算sigma
         encoder_output,
         z_size,
         activation=tf.nn.softplus,
         name='encoder/sigma',
-        kernel_initializer=tf.random_normal_initializer(stddev=0.001))
+        kernel_initializer=tf.random_normal_initializer(stddev=0.001)) ##
+    ##我可以把以上的东西，得到mu和sigma作为基点
+    return ds.MultivariateNormalDiag(loc=mu, scale_diag=sigma) ##返回的是一个分布 
 
-    return ds.MultivariateNormalDiag(loc=mu, scale_diag=sigma)
-
-  def _compute_model_loss(
+  def _compute_model_loss( ##计算model
       self, input_sequence, output_sequence, sequence_length, control_sequence):
     """Builds a model with loss for train/eval."""
-    hparams = self.hparams
-    batch_size = hparams.batch_size
+    hparams = self.hparams ##超参数
+    batch_size = hparams.batch_size ##batch size
 
-    input_sequence = tf.to_float(input_sequence)
-    output_sequence = tf.to_float(output_sequence)
+    input_sequence = tf.to_float(input_sequence) ## input 序列
+    output_sequence = tf.to_float(output_sequence) ## output 序列
 
-    max_seq_len = tf.minimum(tf.shape(output_sequence)[1], hparams.max_seq_len)
+    max_seq_len = tf.minimum(tf.shape(output_sequence)[1], hparams.max_seq_len) ## 最大的seq长度
 
-    input_sequence = input_sequence[:, :max_seq_len]
+    input_sequence = input_sequence[:, :max_seq_len] ##全部统一为最大的seq长度
 
-    if control_sequence is not None:
-      control_depth = control_sequence.shape[-1]
+    if control_sequence is not None: ##如果control seq不是None
+      control_depth = control_sequence.shape[-1] ##
       control_sequence = tf.to_float(control_sequence)
       control_sequence = control_sequence[:, :max_seq_len]
       # Shouldn't be necessary, but the slice loses shape information when
@@ -257,7 +257,7 @@ class MusicVAE(object):
       kl_div = tf.zeros([batch_size, 1], dtype=tf.float32)
       z = None
 
-    r_loss, metric_map = self.decoder.reconstruction_loss(
+    r_loss, metric_map = self.decoder.reconstruction_loss( ##这块就是decoder
         x_input, x_target, x_length, z, control_sequence)[0:2]
 
     free_nats = hparams.free_bits * tf.log(2.0)
@@ -294,7 +294,7 @@ class MusicVAE(object):
     """
 
     _, scalars_to_summarize = self._compute_model_loss(
-        input_sequence, output_sequence, sequence_length, control_sequence)
+        input_sequence, output_sequence, sequence_length, control_sequence) ##计算一次LOSS的值
 
     hparams = self.hparams
     lr = ((hparams.learning_rate - hparams.min_learning_rate) *
